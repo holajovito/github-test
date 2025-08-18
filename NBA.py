@@ -1,36 +1,15 @@
 from nba_api.stats.endpoints import shotchartdetail
 from nba_api.stats.static import players
 import pandas as pd
+import time
 
-# 🔍 Get player ID from full name
-def fetch_player_id(player_name_input):
-    matched_players = [p for p in players.get_players() if p['full_name'] == player_name_input]
-    return matched_players[0]['id'] if matched_players else None
-
-# 📊 Get shot chart data for a player and season
-def fetch_shot_data(player_name_input, season_string_input):
-    player_id = fetch_player_id(player_name_input)
-    if not player_id:
-        print(f"❌ Player not found: {player_name_input}")
-        return None
-    chart = shotchartdetail.ShotChartDetail(
-        team_id=0,
-        player_id=player_id,
-        season_type_all_star='Regular Season',
-        season_nullable=season_string_input,
-        context_measure_simple='FGA'
-    )
-    data = chart.get_data_frames()[0]
-    return data
-
-# ✅ Player names (must match NBA API exactly)
+# ✅ Target player names (must match NBA API exactly)
 nba_player_names = [
     "Shai Gilgeous-Alexander",
     "Jayson Tatum",
-    #"Luka Dončić",
-    "Giannis Antetokounmpo"
-    #"Nikola Jokić"
-
+    "Luka Dončić",
+    "Giannis Antetokounmpo",
+    "Nikola Jokić"
 ]
 
 # 📅 Seasons to pull
@@ -38,22 +17,53 @@ nba_season_labels = [
     "2019-20", "2020-21", "2021-22", "2022-23", "2023-24", "2024-25"
 ]
 
-# 📦 Collect all shot chart data
-compiled_shot_data = []
+# 🔍 Get all active NBA players
+nba_players = players.get_active_players()
 
-for player_name in nba_player_names:
-    for season_label in nba_season_labels:
-        shot_data_frame = fetch_shot_data(player_name, season_label)
-        if shot_data_frame is not None:
-            shot_data_frame['Player'] = player_name
-            shot_data_frame['Season'] = season_label
-            compiled_shot_data.append(shot_data_frame)
+# 🎯 Filter only the players you want
+filtered_players = [p for p in nba_players if p['full_name'] in nba_player_names]
 
-# 🧮 Combine into one DataFrame
-final_shot_data = pd.concat(compiled_shot_data, ignore_index=True)
+# 📦 Initialize container
+all_shots_df = pd.DataFrame()
 
-# 💾 Optional: Save to CSV
-# final_shot_data.to_csv("nba_shot_data_2019_2023.csv", index=False)
+# 🔁 Loop through players and seasons
+for player in filtered_players:
+    player_id = player['id']
+    player_name = player['full_name']
 
-# 👀 Preview key columns
-print(final_shot_data[['PLAYER_NAME', 'GAME_DATE', 'SHOT_TYPE', 'SHOT_ZONE_BASIC', 'SHOT_DISTANCE', 'SHOT_MADE_FLAG']].tail(10))
+    for season in nba_season_labels:
+        try:
+            # 📊 Pull shot chart data
+            shot_chart = shotchartdetail.ShotChartDetail(
+                team_id=0,
+                player_id=player_id,
+                season_type_all_star='Regular Season',
+                season_nullable=season,
+                context_measure_simple='FGA'
+            )
+
+            shot_chart_data = shot_chart.get_data_frames()[0]
+
+            if not shot_chart_data.empty:
+                shot_chart_data['player_name'] = player_name
+                shot_chart_data['player_id'] = player_id
+                shot_chart_data['season'] = season
+                all_shots_df = pd.concat([all_shots_df, shot_chart_data], ignore_index=True)
+                print(f"✅ {player_name} ({season}) added")
+            else:
+                print(f"⚠️ No data for {player_name} ({season})")
+
+            time.sleep(1)
+
+        except Exception as e:
+            print(f"❌ Error for {player_name} ({season}): {e}")
+            time.sleep(1.5)
+
+# 👀 Display or export
+# Export full dataset to CSV
+all_shots_df.to_csv("multi_season_shot_data.csv", index=False)
+print("✅ Data exported to multi_season_shot_data.csv")
+#print(all_shots_df.columns)
+#print(all_shots_df.tail(20))
+#print(all_shots_df[['player_name', 'season', 'GAME_DATE', 'SHOT_ZONE_BASIC', 'SHOT_DISTANCE', 'SHOT_MADE_FLAG']].head(10))
+# all_shots_df.to_csv("multi_season_shot_data.csv", index=False)

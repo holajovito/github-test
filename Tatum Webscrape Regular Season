@@ -1,0 +1,36 @@
+import pandas as pd
+import logging
+import os
+from urllib.parse import urljoin
+
+# Configure logging
+logging.basicConfig(level=logging.INFO, format='%(levelname)s: %(message)s')
+
+# Base URL components
+base_url = "https://www.basketball-reference.com/players/t/tatumja01/"
+export_folder = "exports"
+os.makedirs(export_folder, exist_ok=True)
+
+# Seasons to loop through
+seasons = range(2020, 2026)  # 2020 to 2025 inclusive
+
+for season in seasons:
+    url = urljoin(base_url, f"gamelog-advanced/{season}/")
+    try:
+        tables = pd.read_html(url, flavor='lxml')
+        logging.info(f"[{season}] Extracted {len(tables)} tables from {url}")
+
+        df = tables[0]
+
+        # Remove redundant headers
+        df = df[df['Rk'] != 'Rk']
+        df.reset_index(drop=True, inplace=True)
+
+        # Export cleaned table
+        filename = os.path.join(export_folder, f"tatumja01_advanced_gamelog_{season}.csv")
+        df.to_csv(filename, index=False)
+        logging.info(f"[{season}] Exported cleaned table to {filename}")
+
+    except Exception as ex:
+        logging.error(f"[{season}] Failed to process {url}")
+        logging.error(str(ex))

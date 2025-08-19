@@ -1,0 +1,44 @@
+import pandas as pd
+import logging
+import os
+from urllib.parse import urljoin
+
+# Logging setup
+logging.basicConfig(level=logging.INFO, format='%(levelname)s: %(message)s')
+
+# Base URL and export folder
+base_url = "https://www.basketball-reference.com/players/t/tatumja01/"
+export_folder = "exports"
+os.makedirs(export_folder, exist_ok=True)
+
+# Seasons to scrape
+seasons = range(2020, 2026)
+
+# Container for playoff data
+playoff_df = pd.DataFrame()
+
+for season in seasons:
+    url = urljoin(base_url, f"gamelog-advanced/{season}/")
+    try:
+        tables = pd.read_html(url, flavor='lxml')
+        logging.info(f"[{season}] Extracted {len(tables)} tables from {url}")
+
+        # Try second table (usually playoffs)
+        if len(tables) > 1:
+            df = tables[1]
+            df = df[df['Rk'] != 'Rk']
+            df.reset_index(drop=True, inplace=True)
+            df['Season'] = f"{season-1}-{season}"
+            playoff_df = pd.concat([playoff_df, df], ignore_index=True)
+            logging.info(f"[{season}] Added {len(df)} playoff games")
+        else:
+            logging.info(f"[{season}] No playoff table found")
+
+    except Exception as ex:
+        logging.error(f"[{season}] Failed to process {url}")
+        logging.error(str(ex))
+
+# Export combined playoff data
+filename = os.path.join(export_folder, "tatum_playoff_advanced_2021_2025.csv")
+playoff_df.to_csv(filename, index=False)
+logging.info(f"✅ Exported playoff dataset to {filename}")
